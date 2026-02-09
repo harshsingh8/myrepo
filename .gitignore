@@ -2,4 +2,4 @@ app.log
 secrets.json
 
 *.log
-*.txt
+new_app.txt
