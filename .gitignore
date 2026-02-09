@@ -2,3 +2,4 @@ app.log
 secrets.json
 
 *.log
+*.txt
