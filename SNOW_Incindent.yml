@@ -1,0 +1,91 @@
+---
+- name: Fetch ncident and resolve it and clos incident
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    SNOW_Instance: "Service-now.com"
+    SNOW_User: "Rick123"
+    SNOW_Pass: "xyz890"
+  
+  tasks:
+    - name: add hosts
+      add_host:
+        hostname: "server"
+    - name: Filter out incidents from SNOW for restart Service
+      servicenow.istm.incident_info:
+        instance:
+          host: "{{ SNOW_Instance }}"
+          username: "{{ SNOW_User }}"
+          password: "{{ SNOW_Pass }}"
+        
+        query:
+          - short_description: LIKE restart
+      register: incident_data
+
+    - name: process each incident
+      include_tasks: abc.yml
+      loop: "{{ incident_data.records }}"
+
+    - name: Filter out service name
+      set_fact:
+        service_name: "{{ item.shortDescription.split(':')[-1] }}"
+
+    - name: Mark work in progress for the incident
+      incident:
+        instance:
+          host: "{{ SNOW_Instance }}"
+          username: "{{ SNOW_User }}"
+          password: "{{ SNOW_Pass }}"
+        
+        state: in_progress
+        number: item.number
+
+    - name: restart services
+      win_service:
+        name: "{{ service_name }}"
+        state: restarted
+      register: information
+      until: information.failed | default('false') == 'false'
+      retries: 1
+      delay: 5
+      delegate_to: "server"
+
+    - name: validate service restarted
+      win_service_info:
+        name: "{{ service_name }}"
+      register: service_info
+
+    - name: validate servic erestarted for linux m/c
+      service_facts:
+      delegate_to: "server"
+      when: ansible_facts['Distribution'] == "Redhat"
+
+
+    - name:
+      set_fact:
+        service_info: "success"
+      when: ansible_facts.service_facts[service_name].status == Running
+
+    - name: update Incident as closed
+      incident:
+        instance:
+           host: "{{ SNOW_Instance}}"
+           username: "{{ SNOW_User }}"
+           password: "{{ SNOW_Pass }}"
+
+        state: closed
+        close_notes: "Resolved"
+      when: service_info.services[0].state == "Running"
+
+    
+    - name: update Incident as on hold
+      incident:
+        instance:
+           host: "{{ SNOW_Instance}}"
+           username: "{{ SNOW_User }}"
+           password: "{{ SNOW_Pass }}"
+
+        state: on_hold
+        description: "Service {{ service_name }} did not restart."
+      when: service_info.services[0].state != "Running"

@@ -1,0 +1,19 @@
+---
+- name: Restart a service for windows server
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    Server: "{{ abc.com}}"
+  
+  Tasks:
+    - name: add host
+      add_host:
+        hostname: "{{ Server }}"
+
+    - name: restart a service in windows
+      ansible.windows.win_service:
+        name: nginx
+        start_mode: auto
+        state: restart
+      delegate_to: Server
